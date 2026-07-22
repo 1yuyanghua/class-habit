@@ -1,0 +1,6 @@
+1:"$Sreact.fragment"
+2:I[12012,["/_next/static/chunks/3lptw4q1anjzd.js","/_next/static/chunks/1h9h3xsaki20e.js"],"ViewportBoundary"]
+3:I[12012,["/_next/static/chunks/3lptw4q1anjzd.js","/_next/static/chunks/1h9h3xsaki20e.js"],"MetadataBoundary"]
+4:"$Sreact.suspense"
+5:I[25969,["/_next/static/chunks/3lptw4q1anjzd.js","/_next/static/chunks/1h9h3xsaki20e.js"],"IconMark"]
+0:{"rsc":["$","$1","h",{"children":[null,["$","$L2",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L3",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"习惯养成管理系统 | 26工业机器人2班"}],["$","meta","1",{"name":"description","content":"班主任、学生、家长共同关注的好习惯养成平台"}],["$","link","2",{"rel":"icon","href":"/favicon.ico?favicon.2vob68tjqpejf.ico","sizes":"256x256","type":"image/x-icon"}],["$","$L5","3",{}]]}]}]}],null]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"JIlhdZ6u-8A-H_2rMW7lE"}
