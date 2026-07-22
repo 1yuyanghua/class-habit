@@ -1,4 +1,4 @@
-import { studentStore, habitScoreStore, habitItemStore, noticeStore } from "./store";
+import { studentStore, habitScoreStore, habitItemStore, noticeStore, examStore, examScoreStore } from "./store";
 import type { HabitCategory, DailySummary, TrendData, DashboardStats } from "./types";
 import { categoryLabels } from "./types";
 
@@ -144,3 +144,146 @@ export function getClassCategoryAvg(date: string): Record<HabitCategory, number>
 }
 
 export { CATEGORIES, categoryLabels };
+
+// ========== 成绩分析 ==========
+
+// 获取某次考试的完整成绩矩阵
+export function getExamScoreMatrix(examId: string) {
+  const exam = examStore.getById(examId);
+  if (!exam) return null;
+  const students = studentStore.getAll().filter((s) => s.isActive);
+  const scores = examScoreStore.getByExam(examId);
+
+  return {
+    exam,
+    students,
+    scores,
+    matrix: Object.fromEntries(
+      students.map((stu) => [
+        stu.id,
+        Object.fromEntries(
+          exam.subjects.map((subj) => [
+            subj,
+            scores.find((s) => s.studentId === stu.id && s.subject === subj)?.score ?? null,
+          ] as const)
+        ),
+      ])
+    ),
+  };
+}
+
+// 某次考试班级均分
+export function getExamClassAvg(examId: string) {
+  const exam = examStore.getById(examId);
+  if (!exam) return null;
+  const scores = examScoreStore.getByExam(examId);
+  const students = studentStore.getAll().filter((s) => s.isActive);
+
+  const result: Record<string, number> = {};
+  exam.subjects.forEach((subj) => {
+    const subjScores = scores.filter((s) => s.subject === subj);
+    result[subj] = subjScores.length > 0
+      ? Math.round(subjScores.reduce((sum, s) => sum + s.score, 0) / subjScores.length * 10) / 10
+      : 0;
+  });
+
+  const totalScores = students.map((stu) => {
+    return exam.subjects.reduce((sum, subj) => {
+      const s = scores.find((sc) => sc.studentId === stu.id && sc.subject === subj);
+      return sum + (s?.score ?? 0);
+    }, 0);
+  }).filter((t) => t > 0);
+  result["total"] = totalScores.length > 0
+    ? Math.round(totalScores.reduce((a, b) => a + b, 0) / totalScores.length * 10) / 10
+    : 0;
+
+  return result;
+}
+
+// 某次考试最高分
+export function getExamMaxScore(examId: string) {
+  const exam = examStore.getById(examId);
+  if (!exam) return null;
+  const scores = examScoreStore.getByExam(examId);
+  const students = studentStore.getAll().filter((s) => s.isActive);
+
+  let maxScore = 0;
+  students.forEach((stu) => {
+    const total = exam.subjects.reduce((sum, subj) => {
+      const s = scores.find((sc) => sc.studentId === stu.id && sc.subject === subj);
+      return sum + (s?.score ?? 0);
+    }, 0);
+    if (total > maxScore) maxScore = total;
+  });
+
+  const scoredCount = students.filter((stu) => {
+    return exam.subjects.some((subj) =>
+      scores.find((sc) => sc.studentId === stu.id && sc.subject === subj)
+    );
+  }).length;
+
+  return { maxScore, scoredCount };
+}
+
+// 某次考试学生排名
+export function getExamRanking(examId: string) {
+  const exam = examStore.getById(examId);
+  if (!exam) return [];
+  const scores = examScoreStore.getByExam(examId);
+  const students = studentStore.getAll().filter((s) => s.isActive);
+
+  const ranking = students.map((stu) => {
+    const totalScore = exam.subjects.reduce((sum, subj) => {
+      const s = scores.find((sc) => sc.studentId === stu.id && sc.subject === subj);
+      return sum + (s?.score ?? 0);
+    }, 0);
+    return { studentId: stu.id, name: stu.name, studentNo: stu.studentNo, totalScore };
+  }).sort((a, b) => b.totalScore - a.totalScore);
+
+  return ranking.map((r, idx) => ({ ...r, rank: idx + 1 }));
+}
+
+// 分数段分布
+export function getScoreDistribution(examId: string, subject: string, step: number = 10) {
+  const scores = examScoreStore.getByExam(examId).filter((s) => s.subject === subject);
+  if (scores.length === 0) return [];
+  const maxScore = Math.max(...scores.map((s) => s.score));
+  const ranges: { label: string; count: number }[] = [];
+
+  for (let low = 0; low <= maxScore; low += step) {
+    const high = low + step;
+    const count = scores.filter((s) => s.score >= low && s.score < high).length;
+    ranges.push({ label: `${low}-${high}`, count });
+  }
+  return ranges;
+}
+
+// 某学生某科目历次成绩趋势
+export function getStudentSubjectTrend(studentId: string, subject: string) {
+  const exams = examStore.getAll();
+  const scores = examScoreStore.getByStudent(studentId);
+
+  return exams
+    .filter((e) => e.subjects.includes(subject))
+    .map((e) => {
+      const s = scores.find((sc) => sc.examId === e.id && sc.subject === subject);
+      return { examId: e.id, examName: e.name, date: e.date, score: s?.score ?? null };
+    })
+    .filter((t) => t.score !== null)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+// 某学生历次考试总分趋势
+export function getStudentTotalTrend(studentId: string) {
+  const exams = examStore.getAll();
+  const scores = examScoreStore.getByStudent(studentId);
+
+  return exams.map((e) => {
+    const totalScore = e.subjects.reduce((sum, subj) => {
+      const s = scores.find((sc) => sc.examId === e.id && sc.subject === subj);
+      return sum + (s?.score ?? 0);
+    }, 0);
+    return { examId: e.id, examName: e.name, date: e.date, totalScore };
+  }).filter((t) => t.totalScore > 0)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}

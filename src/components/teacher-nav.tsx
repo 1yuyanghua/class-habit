@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Star, ClipboardCheck, Megaphone, Settings, School, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, Star, ClipboardCheck, Megaphone, Settings, School, LogOut, Menu, X, GraduationCap } from "lucide-react";
 import { sessionStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const navItems = [
   { href: "/teacher", label: "仪表盘", icon: LayoutDashboard },
   { href: "/teacher/students", label: "学生管理", icon: Users },
   { href: "/teacher/rating", label: "今日评分", icon: ClipboardCheck },
+  { href: "/teacher/grades", label: "成绩管理", icon: GraduationCap },
   { href: "/teacher/trends", label: "习惯趋势", icon: Star },
   { href: "/teacher/notices", label: "通知管理", icon: Megaphone },
   { href: "/teacher/settings", label: "设置", icon: Settings },

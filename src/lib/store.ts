@@ -5,16 +5,20 @@ import type {
   ClassInfo,
   Notice,
   HabitCategory,
+  Exam,
+  ExamScore,
 } from "./types";
 import { generateId } from "./utils";
 
-const CURRENT_VERSION = "4";
+const CURRENT_VERSION = "6";
 
 const STORAGE_KEYS = {
   classInfo: "hm_class_info",
   students: "hm_students",
   habitItems: "hm_habit_items",
   habitScores: "hm_habit_scores",
+  exams: "hm_exams",
+  examScores: "hm_exam_scores",
   notices: "hm_notices",
   session: "hm_session",
   initialized: "hm_initialized",
@@ -77,6 +81,7 @@ export function initializeData() {
     { id: "hi-1", category: "attendance", name: "按时到校", description: "不迟到不早退", sortOrder: 1 },
     { id: "hi-2", category: "attendance", name: "课堂纪律", description: "上课认真听讲，不交头接耳", sortOrder: 2 },
     { id: "hi-3", category: "attendance", name: "晚自习纪律", description: "晚自习保持安静，专注学习", sortOrder: 3 },
+    { id: "hi-14", category: "attendance", name: "手机管理", description: "不违规使用手机，按规定上交保管", sortOrder: 14 },
     // 学习习惯
     { id: "hi-4", category: "study", name: "作业完成", description: "按时完成并提交作业", sortOrder: 4 },
     { id: "hi-5", category: "study", name: "课堂笔记", description: "认真做课堂笔记", sortOrder: 5 },
@@ -86,6 +91,7 @@ export function initializeData() {
     { id: "hi-8", category: "life", name: "宿舍内务", description: "宿舍整洁，物品摆放有序", sortOrder: 8 },
     { id: "hi-9", category: "life", name: "个人卫生", description: "仪表整洁，勤洗手勤换衣", sortOrder: 9 },
     { id: "hi-10", category: "life", name: "公共区域", description: "维护教室和公共区域卫生", sortOrder: 10 },
+    { id: "hi-15", category: "life", name: "仪容仪表", description: "校服穿戴整齐，发型符合规范，不佩戴饰品", sortOrder: 15 },
     // 品德与行为
     { id: "hi-11", category: "morality", name: "尊师重道", description: "尊重老师，礼貌待人", sortOrder: 11 },
     { id: "hi-12", category: "morality", name: "帮助同学", description: "主动帮助有困难的同学", sortOrder: 12 },
@@ -165,12 +171,21 @@ export function initializeData() {
     writeOne(STORAGE_KEYS.classInfo, classInfo);
     write(STORAGE_KEYS.habitItems, habitItems);
     write(STORAGE_KEYS.students, students);
+  } else if (savedVersion === "5") {
+    // 版本5→6升级：仅更新 habitItems（新增手机管理、仪容仪表），保留其他数据
+    write(STORAGE_KEYS.habitItems, habitItems);
   } else {
     writeOne(STORAGE_KEYS.classInfo, classInfo);
     write(STORAGE_KEYS.habitItems, habitItems);
     write(STORAGE_KEYS.students, students);
     write(STORAGE_KEYS.notices, notices);
     write(STORAGE_KEYS.habitScores, habitScores);
+  }
+
+  // 版本5新增：初始化成绩管理的空数据
+  if (savedVersion !== "5") {
+    write<Exam>(STORAGE_KEYS.exams, []);
+    write<ExamScore>(STORAGE_KEYS.examScores, []);
   }
 
   localStorage.setItem(STORAGE_KEYS.initialized, "true");
@@ -213,6 +228,7 @@ export const studentStore = {
   delete: (id: string) => {
     write(STORAGE_KEYS.students, read<Student>(STORAGE_KEYS.students).filter((s) => s.id !== id));
     write(STORAGE_KEYS.habitScores, read<HabitScore>(STORAGE_KEYS.habitScores).filter((s) => s.studentId !== id));
+    write(STORAGE_KEYS.examScores, read<ExamScore>(STORAGE_KEYS.examScores).filter((s) => s.studentId !== id));
   },
 };
 
@@ -330,3 +346,72 @@ export function clearAllData(): void {
 export function clearAllScores(): void {
   write<HabitScore>(STORAGE_KEYS.habitScores, []);
 }
+
+// ============ 成绩管理 - 考试 ============
+export const examStore = {
+  getAll: () => read<Exam>(STORAGE_KEYS.exams).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  ),
+  getById: (id: string) => read<Exam>(STORAGE_KEYS.exams).find((e) => e.id === id) || null,
+  create: (data: Omit<Exam, "id" | "createdAt">) => {
+    const exams = read<Exam>(STORAGE_KEYS.exams);
+    const newExam: Exam = { ...data, id: generateId(), createdAt: new Date().toISOString() };
+    exams.push(newExam);
+    write(STORAGE_KEYS.exams, exams);
+    return newExam;
+  },
+  update: (id: string, data: Partial<Exam>) => {
+    const exams = read<Exam>(STORAGE_KEYS.exams);
+    const idx = exams.findIndex((e) => e.id === id);
+    if (idx >= 0) {
+      exams[idx] = { ...exams[idx], ...data };
+      write(STORAGE_KEYS.exams, exams);
+    }
+  },
+  delete: (id: string) => {
+    write(STORAGE_KEYS.exams, read<Exam>(STORAGE_KEYS.exams).filter((e) => e.id !== id));
+    write(STORAGE_KEYS.examScores, read<ExamScore>(STORAGE_KEYS.examScores).filter((s) => s.examId !== id));
+  },
+};
+
+// ============ 成绩管理 - 评分 ============
+export const examScoreStore = {
+  getAll: () => read<ExamScore>(STORAGE_KEYS.examScores),
+  getByExam: (examId: string) => read<ExamScore>(STORAGE_KEYS.examScores).filter((s) => s.examId === examId),
+  getByStudent: (studentId: string) => read<ExamScore>(STORAGE_KEYS.examScores).filter((s) => s.studentId === studentId),
+  getByExamAndStudent: (examId: string, studentId: string) =>
+    read<ExamScore>(STORAGE_KEYS.examScores).filter((s) => s.examId === examId && s.studentId === studentId),
+  upsert: (examId: string, studentId: string, subject: string, score: number) => {
+    const scores = read<ExamScore>(STORAGE_KEYS.examScores);
+    const existing = scores.find(
+      (s) => s.examId === examId && s.studentId === studentId && s.subject === subject
+    );
+    if (existing) {
+      existing.score = score;
+    } else {
+      scores.push({ id: generateId(), examId, studentId, subject, score });
+    }
+    write(STORAGE_KEYS.examScores, scores);
+  },
+  bulkUpsert: (records: { examId: string; studentId: string; subject: string; score: number }[]) => {
+    const scores = read<ExamScore>(STORAGE_KEYS.examScores);
+    records.forEach((rec) => {
+      const existing = scores.find(
+        (s) => s.examId === rec.examId && s.studentId === rec.studentId && s.subject === rec.subject
+      );
+      if (existing) {
+        existing.score = rec.score;
+      } else {
+        scores.push({ id: generateId(), ...rec });
+      }
+    });
+    write(STORAGE_KEYS.examScores, scores);
+  },
+  deleteByExamAndStudent: (examId: string, studentId: string) => {
+    write(STORAGE_KEYS.examScores,
+      read<ExamScore>(STORAGE_KEYS.examScores).filter(
+        (s) => !(s.examId === examId && s.studentId === studentId)
+      )
+    );
+  },
+};

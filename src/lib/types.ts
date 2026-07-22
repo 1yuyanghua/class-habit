@@ -95,6 +95,37 @@ export interface TrendData {
   categoryRatings: Record<HabitCategory, number>;
 }
 
+// ========== 成绩管理 ==========
+
+export type ExamType = "monthly" | "midterm" | "final" | "mock" | "custom";
+
+export const examTypeLabels: Record<ExamType, { label: string; icon: string; color: string }> = {
+  monthly:  { label: "月考", icon: "📅", color: "text-blue-600 bg-blue-50 border-blue-200" },
+  midterm:  { label: "期中", icon: "📝", color: "text-amber-600 bg-amber-50 border-amber-200" },
+  final:    { label: "期末", icon: "🏆", color: "text-red-600 bg-red-50 border-red-200" },
+  mock:     { label: "模拟考", icon: "🎯", color: "text-purple-600 bg-purple-50 border-purple-200" },
+  custom:   { label: "自定义", icon: "📋", color: "text-slate-600 bg-slate-50 border-slate-200" },
+};
+
+// 考试定义
+export interface Exam {
+  id: string;
+  name: string;
+  type: ExamType;
+  date: string;
+  subjects: string[];          // 自定义科目名数组，如 ["机械制图", "电工电子", "语文"]
+  createdAt: string;
+}
+
+// 单条成绩记录
+export interface ExamScore {
+  id: string;
+  examId: string;
+  studentId: string;
+  subject: string;             // 科目名（与 Exam.subjects 中的字符串对应）
+  score: number;
+}
+
 // 仪表盘统计
 export interface DashboardStats {
   studentCount: number;

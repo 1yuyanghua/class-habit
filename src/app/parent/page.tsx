@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { sessionStore, initializeData, studentStore, noticeStore, habitItemStore, habitScoreStore } from "@/lib/store";
-import { getStudentTrend, getStudentDailySummary, getToday, CATEGORIES, categoryLabels } from "@/lib/queries";
+import { sessionStore, initializeData, studentStore, noticeStore, habitItemStore, habitScoreStore, examStore, examScoreStore } from "@/lib/store";
+import { getStudentTrend, getStudentDailySummary, getToday, CATEGORIES, categoryLabels, getStudentSubjectTrend, getStudentTotalTrend, getExamRanking } from "@/lib/queries";
+import { examTypeLabels } from "@/lib/types";
 import type { Student, Notice, TrendData, HabitCategory } from "@/lib/types";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
-import { Star, TrendingUp, Megaphone, BookOpen, LogOut, School, Calendar } from "lucide-react";
+import { Star, TrendingUp, Megaphone, BookOpen, LogOut, School, Calendar, GraduationCap } from "lucide-react";
 import { relativeTime, formatDate } from "@/lib/utils";
 
 export default function ParentPage() {
@@ -15,7 +16,7 @@ export default function ParentPage() {
   const [trend, setTrend] = useState<TrendData[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [todaySummary, setTodaySummary] = useState<ReturnType<typeof getStudentDailySummary>>(null);
-  const [tab, setTab] = useState<"overview" | "trend" | "notices">("overview");
+  const [tab, setTab] = useState<"overview" | "trend" | "notices" | "grades">("overview");
 
   useEffect(() => {
     initializeData();
@@ -96,10 +97,11 @@ export default function ParentPage() {
             { key: "overview", label: "今日表现" },
             { key: "trend", label: "习惯趋势" },
             { key: "notices", label: "通知作业" },
+            { key: "grades", label: "考试成绩" },
           ].map((t) => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key as "overview" | "trend" | "notices")}
+              onClick={() => setTab(t.key as "overview" | "trend" | "notices" | "grades")}
               className={`flex-1 py-2 rounded-md text-sm font-medium ${
                 tab === t.key ? "bg-indigo-600 text-white" : "text-slate-500"
               }`}
@@ -250,6 +252,9 @@ export default function ParentPage() {
           </div>
         )}
 
+        {/* 考试成绩 */}
+        {tab === "grades" && <ParentGrades studentId={student.id} />}
+
         {/* 学生信息 */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <h2 className="font-bold text-slate-900 mb-3 text-sm">学生信息</h2>
@@ -279,6 +284,140 @@ export default function ParentPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ========== 家长端成绩组件 ==========
+function ParentGrades({ studentId }: { studentId: string }) {
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const exams = examStore.getAll();
+  const scores = examScoreStore.getByStudent(studentId);
+
+  // 从所有考试中提取该学生有成绩的科目列表
+  const allSubjects = Array.from(new Set(
+    exams.flatMap((e) => e.subjects)
+  )).filter((subj) =>
+    scores.some((s) => s.subject === subj)
+  );
+
+  const effectiveSubject = subjectFilter || allSubjects[0] || "";
+  const subjectTrend = getStudentSubjectTrend(studentId, effectiveSubject);
+  const totalTrend = getStudentTotalTrend(studentId);
+
+  // 按考试展示成绩
+  const examResults = exams
+    .map((exam) => {
+      const examScores = scores.filter((s) => s.examId === exam.id);
+      if (examScores.length === 0) return null;
+      const total = exam.subjects.reduce((sum, subj) => {
+        const s = examScores.find((sc) => sc.subject === subj);
+        return sum + (s?.score ?? 0);
+      }, 0);
+      const ranking = getExamRanking(exam.id);
+      const rank = ranking.find((r) => r.studentId === studentId);
+      return { exam, scores: examScores, total, rank };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((a, b) => new Date(b.exam.date).getTime() - new Date(a.exam.date).getTime());
+
+  return (
+    <div className="space-y-4">
+      {/* 历次考试卡片 */}
+      {examResults.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <GraduationCap className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-400">暂无考试成绩记录</p>
+        </div>
+      ) : (
+        examResults.map((result) => {
+          const typeInfo = examTypeLabels[result.exam.type];
+          const exam = result.exam;
+          return (
+            <div key={exam.id} className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{typeInfo.icon}</span>
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">{exam.name}</h3>
+                    <p className="text-xs text-slate-500">
+                      {exam.date} · {typeInfo.label}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-indigo-600">{result.total}</p>
+                  <p className="text-xs text-slate-400">总分</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                {exam.subjects.map((subj) => {
+                  const s = result.scores.find((sc) => sc.subject === subj);
+                  return (
+                    <div key={subj} className="bg-slate-50 rounded-lg p-2 text-center">
+                      <p className="text-xs text-slate-400">{subj}</p>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {s ? s.score : "-"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              {result.rank && (
+                <p className="text-xs text-slate-400 mt-2">
+                  班级排名: 第 {result.rank.rank} 名 / 共{" "}
+                  {getExamRanking(exam.id).filter((r) => r.totalScore > 0).length} 人
+                </p>
+              )}
+            </div>
+          );
+        })
+      )}
+
+      {/* 科目趋势图 */}
+      {allSubjects.length > 0 && subjectTrend.length > 1 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-slate-900 text-sm">各科成绩趋势</h3>
+            <select
+              value={effectiveSubject}
+              onChange={(e) => setSubjectFilter(e.target.value)}
+              className="px-2 py-1 rounded border border-slate-200 text-xs bg-white"
+            >
+              {allSubjects.map((subj) => (
+                <option key={subj} value={subj}>
+                  {subj}
+                </option>
+              ))}
+            </select>
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={subjectTrend.map((t) => ({ name: t.examName, score: t.score }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: unknown) => [Number(v), "分数"]} />
+              <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* 总分趋势图 */}
+      {totalTrend.length > 1 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="font-bold text-slate-900 text-sm mb-3">总分趋势</h3>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={totalTrend.map((t) => ({ name: t.examName, totalScore: t.totalScore }))}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v: unknown) => [Number(v), "总分"]} />
+              <Line type="monotone" dataKey="totalScore" stroke="#059669" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }
